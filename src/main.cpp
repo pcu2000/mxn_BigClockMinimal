@@ -20,6 +20,16 @@ const int chalangeBarrier = 21;
 const int chalangeRover = 32;
 
 const int offset = 0;
+
+const char* ntpServer = "pool.ntp.org";
+const long  gmtOffset_sec = 0;
+const int   daylightOffset_sec = 3600;
+
+/* For PWMOut*/
+const int PWM_CHANNEL_BACKLIGHT = 0;
+const int PWM_FREQ = 500;
+const int PWM_RESOLUTION = 8;
+
 ESP32Time rtc(offset); // create an instance with a specifed offset in seconds
 int second = 0;
 int minute = 0;
@@ -32,20 +42,10 @@ int minute_10er = 0;
 int hour_1er = 0;
 int hour_10er = 0;
 
-int second3 = 0;
-int second3_1er = 0;
-int second3_10er = 0;
-int second3_100er = 0;
-int milis = 0;
-int milis_100er = 0;
-
 int state = 20;
 const int STARTUP = 0;
-const int STARTWAIT = 5;
-const int CHANGECHALLANGE = 10;
 const int COWNTDOWN = 20;
-const int RACE = 30;
-const int ENDRACE = 80;
+const int PRINT_TIME = 30;
 
 
 const char* ssid     = "wlan-name";     // your network SSID (name of wifi network)
@@ -58,8 +58,8 @@ int status = WL_IDLE_STATUS;                     // the Wifi radio's status
 
 WiFiClientSecure client;
 
-void actualDisp();
-void actualDisp100();
+void setBackLight(uint8_t brightness, bool onOff);
+void printActualTime();
 void valueToDisp(int digit, int value);
 void printWifiStatus();
 
@@ -88,19 +88,31 @@ void setup() {
 
   if(status == WL_CONNECTED){
     Serial.println("Wifi verbunden");
+    /*---------set with NTP---------------*/
+    configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+    struct tm timeinfo;
+    if (getLocalTime(&timeinfo)){
+      rtc.setTimeStruct(timeinfo); 
+    }
+    Serial.println(rtc.getTime());          //  (String) 15:24:38
+    Serial.println(rtc.getDate());          //  (String) Sun, Jan 17 2021
   }else{
     Serial.println("Wifi nicht verbunden");
     Serial.println(WiFi.status());
+    rtc.setTime(0, 19, 7, 27, 1, 2025);
   }
   printWifiStatus();
   client.setInsecure(); // don't use a root cert
   //Serial.println(WiFi.macAddress());
-  rtc.setTime(0, 0, 0, 1, 1, 2023);
+
+
+
+
   pinMode(anzD0, OUTPUT);    // sets the digital pin 13 as output
   pinMode(anzD1, OUTPUT);    // sets the digital pin 13 as output
   pinMode(anzD2, OUTPUT);    // sets the digital pin 13 as output
   pinMode(anzD3, OUTPUT);    // sets the digital pin 13 as output
-  pinMode(anzBL, OUTPUT);    // sets the digital pin 13 as output
+  //pinMode(anzBL, OUTPUT);    // sets the digital pin 13 as output
   pinMode(anzLE0, OUTPUT);    // sets the digital pin 13 as output
   pinMode(anzLE1, OUTPUT);    // sets the digital pin 13 as output
   pinMode(anzLE2, OUTPUT);    // sets the digital pin 13 as output
@@ -123,7 +135,7 @@ void setup() {
   digitalWrite(anzLE2, LOW);
   digitalWrite(anzLE3, LOW);
 
-  digitalWrite(anzBL, HIGH);
+  //digitalWrite(anzBL, HIGH);
 
   
   digitalWrite(pointUp, HIGH);
@@ -131,40 +143,23 @@ void setup() {
   digitalWrite(chalangeBarrier, HIGH);
   digitalWrite(chalangeRover, HIGH);
 
+  ledcSetup(PWM_CHANNEL_BACKLIGHT, PWM_FREQ, PWM_RESOLUTION);
+  ledcAttachPin(anzBL, PWM_CHANNEL_BACKLIGHT);
+  setBackLight(255, 1);
+
 }
 
 void loop() {
-  //digitalWrite(anzBL, HIGH); // sets the digital pin 13 on
-  //delay(500);            // waits for a second
-  //digitalWrite(anzBL, LOW);  // sets the digital pin 13 off
-  //delay(500);            // waits for a second
   switch (state) {
     case STARTUP:
-      if(!digitalRead(startButton)){
-        state = STARTWAIT;
-          Serial.println(state);
-          }
-      break;
-    case STARTWAIT:
-      if(digitalRead(startButton) && !digitalRead(endSensor)){
-        state = CHANGECHALLANGE;
-        Serial.println(state);
-        }
-      break;
-    case CHANGECHALLANGE:
-      //getAnswersCorrect();
-      //digitalWrite(chalangeProp, HIGH);
-      digitalWrite(chalangeBarrier, LOW);
-      digitalWrite(chalangeRover, LOW);
-      state = COWNTDOWN;
-      Serial.println(state);
+        state = COWNTDOWN;
       break;
     case COWNTDOWN:    
       valueToDisp(0, 4);
       delay(10);
       valueToDisp(1, 4);
       delay(10);
-      valueToDisp(2, 2);
+      valueToDisp(2, 4);
       delay(10);
       valueToDisp(3, 4);
       delay(1000);    
@@ -172,11 +167,15 @@ void loop() {
       delay(10);
       valueToDisp(1, 3);
       delay(10);
+      valueToDisp(2, 3);
+      delay(10);
       valueToDisp(3, 3);
       delay(1000);    
       valueToDisp(0, 2);
       delay(10);
       valueToDisp(1, 2);
+      delay(10);
+      valueToDisp(2, 2);
       delay(10);
       valueToDisp(3, 2);
       delay(1000);    
@@ -184,114 +183,78 @@ void loop() {
       delay(10);
       valueToDisp(1, 1);
       delay(10);
+      valueToDisp(2, 1);
+      delay(10);
       valueToDisp(3, 1);
       delay(1000);
-      rtc.setTime(0, 0, 0, 17, 1, 2025);
-      //digitalWrite(startCoil, LOW);    
       valueToDisp(0, 0);
       delay(10);
       valueToDisp(1, 0);
       delay(10);
+      valueToDisp(2, 0);
+      delay(10);
       valueToDisp(3, 0);
       delay(1000);
-      state = RACE;
+      state = PRINT_TIME;
       Serial.println(state);
       break;
-    case RACE:
-      if(digitalRead(endSensor)){
-        //digitalWrite(startCoil, HIGH);
-          //state = ENDRACE;
-        Serial.println(state);
-      }
-      break;
-    case ENDRACE:
-      digitalWrite(anzBL, HIGH);
-      delay(500);
-      digitalWrite(anzBL, LOW);
-      delay(500);
-      if(digitalRead(startButton)){    
-      valueToDisp(0, 8);
-      delay(10);
-      valueToDisp(1, 8);
-      delay(10);
-      valueToDisp(3, 8);
-      
-      //digitalWrite(chalangeProp, LOW);
-      digitalWrite(chalangeBarrier, HIGH);
-      digitalWrite(chalangeRover, HIGH);
-        state = STARTUP;
-      Serial.println(state);
-        }
+    case PRINT_TIME:
+      printActualTime();
       break;
     default:
       // statements
       break;
   }
 
-  actualDisp();
-  //actualMilis();
-  //actualDisp100();
-
-  /*second = rtc.getSecond();
-  if(secondOld != second && state == RACE){
-    second_1er = second % 10;
-    second_10er = second / 10;
-    minute = rtc.getMinute();
-    minute_1er = minute % 10;
-    minute_10er = minute / 10;
-    valueToDisp(0, second_1er);
-    delay(10);
-    valueToDisp(1, second_10er);
-    delay(10);
-    valueToDisp(2, minute_1er);
-    delay(10);
-    valueToDisp(3, minute_10er);
-    delay(10);
-    secondOld = second;
-  }*/
-
-  /*if(digitalRead(startButton)){
-    digitalWrite(startCoil, HIGH);
-  } else {
-    digitalWrite(startCoil, LOW);
-    digitalWrite(chalangeProp, LOW);
-    digitalWrite(chalangeBarrier, LOW);
-    digitalWrite(chalangeRover, LOW);
-  }*/
-
   delay(10);
 
 }
 
-void actualDisp(){
-    second = rtc.getSecond();
-  if(secondOld != second && state == RACE){
+/**
+ * @brief Diese Fuktion ist für das einstellen der Hintergrundbeleuchtung verantwortlich
+ * 
+ */
+void setBackLight(uint8_t brightness, bool onOff){
+  if(onOff == true){
+    ledcWrite(PWM_CHANNEL_BACKLIGHT, brightness);
+  }else{
+    ledcWrite(PWM_CHANNEL_BACKLIGHT, 0);
+  }
+}
+
+
+void printActualTime(){
+  second = rtc.getSecond();
+  int dayOfWeek = rtc.getDayofWeek();
+  if(secondOld != second){
     second_1er = second % 10;
     second_10er = second / 10;
     minute = rtc.getMinute();
     minute_1er = minute % 10;
     minute_10er = minute / 10;
     hour = rtc.getHour(true);
-    minute_1er = minute % 10;
-    minute_10er = minute / 10;
+    hour_1er = hour % 10;
+    hour_10er = hour / 10;
     if(second % 2 == 1){
       digitalWrite(pointUp, LOW); 
       digitalWrite(pointDown, LOW); 
+      //setBackLight(255, 1);
     } else {
       digitalWrite(pointUp, HIGH); 
       digitalWrite(pointDown, HIGH); 
+      //setBackLight(255, 1);
     }
-    valueToDisp(3, second_1er);
+    //valueToDisp(3, second_1er);
     //delay(10);
-    valueToDisp(2, second_10er);
+    //valueToDisp(2, second_10er);
     //delay(10);
-    valueToDisp(1, minute_1er);
+    valueToDisp(3, minute_1er);
     //delay(10);
-    valueToDisp(0, minute_10er);
+    valueToDisp(2, minute_10er);
     //delay(10);
-    //valueToDisp(3, hour_1er);
+    valueToDisp(1, hour_1er);
     //delay(10);
-    //valueToDisp(4, hour_10er);
+    valueToDisp(0, hour_10er);
     //delay(10);
     /*if(second % 2 == 1){
       valueToDisp(2, 8); 
@@ -303,38 +266,11 @@ void actualDisp(){
     /*if(minute_1er >= 9 && second_10er >= 5 && second_1er >= 9){
       state = ENDRACE;
     }*/
-  }
-}
-
-
-void actualMilis(){
-    
-  if(state == RACE){
-    milis = rtc.getMillis();
-    milis_100er = milis / 100;
-    valueToDisp(0, milis_100er);
-    delay(10);
-  }
-}
-
-void actualDisp100(){
-    second = rtc.getSecond();
-  if(secondOld != second && state == RACE){
-    minute = rtc.getMinute();
-    second3 = (minute * 60) + second;
-    second3_1er = second3 % 10;
-    second3_10er = (second3 % 100) / 10;
-    second3_100er = second3 / 100;
-    valueToDisp(1, second3_1er);
-    delay(10);
-    valueToDisp(2, second3_10er);
-    delay(10);
-    valueToDisp(3, second3_100er);
-    delay(10);
-    if(second3 >= 999){
-      state = ENDRACE;
-    }
-    secondOld = second;
+   if((hour > 6 || hour < 18)&&(dayOfWeek > 0 && dayOfWeek < 6)){
+    setBackLight(255, 1);
+   }else{
+    setBackLight(0, 1);
+   }
   }
 }
 
@@ -372,10 +308,6 @@ void valueToDisp(int digit, int value){
       // statements
       break;
   }
-  //digitalWrite(anzLE0, HIGH);
-  //digitalWrite(anzLE1, HIGH);
-  //digitalWrite(anzLE2, HIGH);
-  //digitalWrite(anzLE3, HIGH);
 
 }
 
